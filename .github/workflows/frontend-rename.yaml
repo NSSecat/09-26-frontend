@@ -1,0 +1,471 @@
+name: frontend_rename
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_variant:
+        description: "Frontend version"
+        required: true
+        type: choice
+        options:
+          - cloud
+          - cloud_v2
+          - standard
+          - standard_v2
+        default: standard_v2
+
+      namespace:
+        description: "Target namespace, e.g. #sct#au5 or /sct/au5"
+        required: true
+        type: string
+        default: "#sct#au5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: frontend-rename-${{ inputs.frontend_variant }}-${{ inputs.namespace }}
+  cancel-in-progress: false
+
+jobs:
+  rename:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      FRONTEND_VARIANT: ${{ inputs.frontend_variant }}
+      NAMESPACE_INPUT: ${{ inputs.namespace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate and derive names
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          variant="$FRONTEND_VARIANT"
+          input="$NAMESPACE_INPUT"
+
+          case "$variant" in
+            cloud|cloud_v2|standard|standard_v2)
+              ;;
+            *)
+              echo "::error::Invalid frontend variant: $variant"
+              exit 1
+              ;;
+          esac
+
+          # Convert abapGit notation to SAP slash notation.
+          #
+          # #sct#au5 -> /sct/au5
+          # sct#au5  -> /sct/au5
+          # /sct/au5 -> /sct/au5
+          normalized="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+
+          if [[ "$normalized" =~ ^#([a-z][a-z0-9_]*)#([a-z][a-z0-9_]*)$ ]]; then
+            namespace="/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+          elif [[ "$normalized" =~ ^/([a-z][a-z0-9_]*)/([a-z][a-z0-9_]*)$ ]]; then
+            namespace="$normalized"
+          elif [[ "$normalized" =~ ^([a-z][a-z0-9_]*)#([a-z][a-z0-9_]*)$ ]]; then
+            namespace="/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+          else
+            echo "::error::Invalid namespace '$input'."
+            echo "::error::Use #sct#au5 or /sct/au5."
+            exit 1
+          fi
+
+          namespace_without_slashes="${namespace#/}"
+          namespace_without_slashes="${namespace_without_slashes%/}"
+
+          IFS='/' read -r namespace_part object_part <<< "$namespace_without_slashes"
+
+          if [ -z "$namespace_part" ] || [ -z "$object_part" ]; then
+            echo "::error::Namespace must have the format /namespace/object."
+            exit 1
+          fi
+
+          if [ "${#namespace_part}" -gt 8 ]; then
+            echo "::error::SAP namespace '$namespace_part' is longer than 8 characters."
+            exit 1
+          fi
+
+          # abapGit filename notation:
+          #
+          # /sct/au5 -> #sct#au5
+          git_namespace="#${namespace_part}#${object_part}"
+
+          # Lowercase deployment name used in file names.
+          deployment_name="${namespace_part}_${object_part}"
+
+          branch="${variant}_${git_namespace}"
+
+          echo "SOURCE_DIR=result/$variant" >> "$GITHUB_ENV"
+          echo "SAP_NAMESPACE=$namespace" >> "$GITHUB_ENV"
+          echo "GIT_NAMESPACE=$git_namespace" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_NAME=$deployment_name" >> "$GITHUB_ENV"
+          echo "TARGET_BRANCH=$branch" >> "$GITHUB_ENV"
+
+          echo "Frontend variant: $variant"
+          echo "Source directory: result/$variant"
+          echo "SAP namespace:   $namespace"
+          echo "Git namespace:   $git_namespace"
+          echo "Target branch:   $branch"
+
+      - name: Prepare selected frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "::error::Source directory '$SOURCE_DIR' does not exist."
+            exit 1
+          fi
+
+          rm -rf "$RUNNER_TEMP/frontend-output"
+          mkdir -p "$RUNNER_TEMP/frontend-output"
+
+          cp -a "$SOURCE_DIR"/. "$RUNNER_TEMP/frontend-output"/
+
+          echo "Selected frontend:"
+          find "$RUNNER_TEMP/frontend-output" -maxdepth 2 -type f | sort
+
+      - name: Rename frontend without abaplint
+        env:
+          WORK_DIR: ${{ runner.temp }}/frontend-output
+          SAP_NAMESPACE: ${{ env.SAP_NAMESPACE }}
+          GIT_NAMESPACE: ${{ env.GIT_NAMESPACE }}
+          FRONTEND_VARIANT: ${{ env.FRONTEND_VARIANT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const crypto = require("node:crypto");
+
+          const workDir = process.env.WORK_DIR;
+          const sapNamespace = process.env.SAP_NAMESPACE;
+          const gitNamespace = process.env.GIT_NAMESPACE;
+          const variant = process.env.FRONTEND_VARIANT;
+
+          const oldBsp = "z2ui5";
+          const oldHandler = "z2ui5_cl_lp_handler";
+
+          const namespaceParts = sapNamespace
+            .replace(/^\/|\/$/g, "")
+            .split("/");
+
+          const namespacePart = namespaceParts[0];
+          const objectPart = namespaceParts[1];
+
+          const newBspLower = `${namespacePart}_${objectPart}`;
+          const newBspFile = gitNamespace;
+          const newHandlerLower = `${newBspLower}_cl_lp_handler`;
+
+          const newBspSap = sapNamespace.toLowerCase();
+          const newHandlerSap = `${newBspSap}_cl_lp_handler`;
+
+          const oldBspFilePrefix = `${oldBsp}`;
+          const oldHandlerFilePrefix = `${oldHandler}`;
+
+          const textExtensions = new Set([
+            ".abap",
+            ".xml",
+            ".json",
+            ".html",
+            ".js",
+            ".css",
+            ".txt",
+            ".md",
+            ".yaml",
+            ".yml"
+          ]);
+
+          function walk(directory) {
+            const result = [];
+
+            for (const entry of fs.readdirSync(directory, {
+              withFileTypes: true
+            })) {
+              const fullPath = path.join(directory, entry.name);
+
+              if (entry.isDirectory()) {
+                result.push(...walk(fullPath));
+              } else if (entry.isFile()) {
+                result.push(fullPath);
+              }
+            }
+
+            return result;
+          }
+
+          function isTextFile(filePath) {
+            return textExtensions.has(path.extname(filePath).toLowerCase())
+              || filePath.endsWith(".sicf.xml")
+              || filePath.endsWith(".smim.xml")
+              || filePath.endsWith(".wapa.xml");
+          }
+
+          function replaceAllDeploymentTokens(content) {
+            let result = content;
+
+            // Handler class:
+            //
+            // z2ui5_cl_lp_handler
+            // /sct/au5_cl_lp_handler
+            result = result.replace(
+              new RegExp(oldHandler, "gi"),
+              (match) => match === match.toUpperCase()
+                ? newHandlerSap.toUpperCase()
+                : newHandlerSap
+            );
+
+            // Standard BSP paths.
+            result = result.replace(
+              /\/sap\/bc\/bsp\/sap\/z2ui5/gi,
+              `/sap/bc/bsp/${namespacePart}/${objectPart}`
+            );
+
+            result = result.replace(
+              /\/sap\/bc\/ui5_ui5\/sap\/z2ui5/gi,
+              `/sap/bc/ui5_ui5/${namespacePart}/${objectPart}`
+            );
+
+            result = result.replace(
+              /\/sap\/bc\/z2ui5/gi,
+              `/sap/bc/${namespacePart}/${objectPart}`
+            );
+
+            // Cloud HTTP service path.
+            result = result.replace(
+              /\/sap\/bc\/http\/sap\/z2ui5/gi,
+              `/sap/bc/http/sap/${namespacePart}/${objectPart}`
+            );
+
+            // SMIM URL.
+            result = result.replace(
+              /\/SAP\/BC\/BSP\/SAP\/Z2UI5/gi,
+              `/SAP/BC/BSP/${namespacePart.toUpperCase()}/${objectPart.toUpperCase()}`
+            );
+
+            // Deployment descriptor files use the bare BSP name.
+            //
+            // This replacement is intentionally limited to XML/ABAP descriptor
+            // files. The UI5 namespace z2ui5 in JavaScript files is preserved.
+            if (
+              currentFile.endsWith(".xml") ||
+              currentFile.endsWith(".abap") ||
+              currentFile.endsWith(".json")
+            ) {
+              result = result.replace(
+                new RegExp(`\\b${oldBsp}\\b`, "gi"),
+                (match) => match === match.toUpperCase()
+                  ? newBspSap.toUpperCase()
+                  : newBspSap
+              );
+            }
+
+            return result;
+          }
+
+          function sicfHash(url) {
+            return crypto
+              .createHash("sha1")
+              .update(url)
+              .digest("hex")
+              .slice(0, 25);
+          }
+
+          function renameFileName(fileName, content) {
+            const lower = fileName.toLowerCase();
+
+            // SICF files have a special abapGit filename:
+            //
+            // 15-character service name + 25-character SHA1 URL hash
+            if (lower.endsWith(".sicf.xml")) {
+              const urlMatch = content.match(/<URL>([^<]+)<\/URL>/i);
+
+              if (urlMatch) {
+                const url = urlMatch[1];
+                const newHash = sicfHash(url);
+
+                return (
+                  newBspLower.padEnd(15, " ") +
+                  newHash +
+                  ".sicf.xml"
+                );
+              }
+            }
+
+            if (lower.startsWith(oldHandlerFilePrefix)) {
+              return newHandlerLower + fileName.slice(oldHandlerFilePrefix.length);
+            }
+
+            if (lower.startsWith(oldBspFilePrefix)) {
+              return newBspFile + fileName.slice(oldBspFilePrefix.length);
+            }
+
+            return fileName;
+          }
+
+          let currentFile = "";
+
+          const files = walk(workDir);
+
+          // First modify contents.
+          for (const filePath of files) {
+            currentFile = filePath;
+
+            if (!isTextFile(filePath)) {
+              continue;
+            }
+
+            let content;
+
+            try {
+              content = fs.readFileSync(filePath, "utf8");
+            } catch {
+              continue;
+            }
+
+            const before = content;
+
+            // Do not rename the UI5 namespace globally. The backend expects
+            // z2ui5/core, z2ui5/cc and z2ui5-xapp-state to stay unchanged.
+            content = replaceAllDeploymentTokens(content);
+
+            if (content !== before) {
+              fs.writeFileSync(filePath, content, "utf8");
+            }
+          }
+
+          // Then rename files. Process deepest paths first.
+          const renamedFiles = walk(workDir)
+            .sort((a, b) => b.length - a.length);
+
+          for (const filePath of renamedFiles) {
+            if (!fs.existsSync(filePath)) {
+              continue;
+            }
+
+            const directory = path.dirname(filePath);
+            const oldName = path.basename(filePath);
+            const newName = renameFileName(
+              oldName,
+              fs.readFileSync(filePath, "utf8")
+            );
+
+            if (oldName !== newName) {
+              fs.renameSync(
+                filePath,
+                path.join(directory, newName)
+              );
+            }
+          }
+
+          // For standard BSP variants, update the generated BSP manifest data
+          // source if it is present inside a WAPA page.
+          if (variant === "standard" || variant === "standard_v2") {
+            for (const filePath of walk(workDir)) {
+              if (!filePath.includes(".wapa.")) {
+                continue;
+              }
+
+              let content;
+
+              try {
+                content = fs.readFileSync(filePath, "utf8");
+              } catch {
+                continue;
+              }
+
+              const updated = content
+                .replace(
+                  /\/sap\/bc\/z2ui5/gi,
+                  `/sap/bc/${namespacePart}/${objectPart}`
+                )
+                .replace(
+                  /\/sap\/bc\/bsp\/sap\/z2ui5/gi,
+                  `/sap/bc/bsp/${namespacePart}/${objectPart}`
+                )
+                .replace(
+                  /\/sap\/bc\/ui5_ui5\/sap\/z2ui5/gi,
+                  `/sap/bc/ui5_ui5/${namespacePart}/${objectPart}`
+                );
+
+              if (updated !== content) {
+                fs.writeFileSync(filePath, updated, "utf8");
+              }
+            }
+          }
+
+          console.log("Rename completed.");
+          console.log(`Variant:       ${variant}`);
+          console.log(`SAP namespace: ${sapNamespace}`);
+          console.log(`Git namespace: ${gitNamespace}`);
+          console.log(`BSP name:      ${newBspLower}`);
+          console.log(`Handler class: ${newHandlerSap}`);
+          NODE
+
+      - name: Prepare branch tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target="$RUNNER_TEMP/branch-tree"
+
+          rm -rf "$target"
+          mkdir -p "$target"
+
+          cp -a "$RUNNER_TEMP/frontend-output"/. "$target"/
+
+          echo "Final branch tree:"
+          find "$target" -print | sort
+
+      - name: Create or update frontend branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          target_branch="$TARGET_BRANCH"
+          target="$RUNNER_TEMP/branch-tree"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main
+
+          # The generated branch is recreated from main.
+          # This keeps it independent from previous generated content.
+          git checkout --detach "origin/main"
+
+          rm -rf "$RUNNER_TEMP/branch-work"
+          mkdir -p "$RUNNER_TEMP/branch-work"
+
+          cp -a "$target"/. "$RUNNER_TEMP/branch-work"/
+
+          git checkout --orphan "$target_branch"
+
+          # Remove files from the orphan checkout.
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name ".git" \
+            -exec rm -rf {} +
+
+          cp -a "$RUNNER_TEMP/branch-work"/. .
+
+          git add -A
+
+          git commit \
+            -m "build: ${target_branch}" \
+            -m "Generated from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+
+          git push --force origin \
+            "HEAD:refs/heads/${target_branch}"
+
+          echo "Frontend branch created or updated:"
+          echo "https://github.com/${GITHUB_REPOSITORY}/tree/${target_branch}"
