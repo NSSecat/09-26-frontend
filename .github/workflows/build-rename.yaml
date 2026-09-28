@@ -338,13 +338,13 @@ jobs:
                   matches.append((str(path), count))
 
           if matches:
-              echo "::warning::Found remaining z2ui5 references in the renamed frontend tree. Continuing anyway."
+              print("::warning::Found remaining z2ui5 references in the renamed frontend tree. Continuing anyway.")
               for file_path, count in matches[:25]:
-                  echo "::warning::  $file_path: $count occurrence(s)"
+                  print(f"::warning::  {file_path}: {count} occurrence(s)")
               if len(matches) > 25:
-                  echo "::warning::  ... and $((len(matches) - 25)) more file(s)"
+                  print(f"::warning::  ... and {len(matches) - 25} more file(s)")
           else:
-              echo "::notice::No z2ui5 references remain in the renamed frontend tree."
+              print("::notice::No z2ui5 references remain in the renamed frontend tree.")
           PY
 
       # ---------------------------------------------------------------
