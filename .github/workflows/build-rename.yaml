@@ -222,7 +222,7 @@ jobs:
                   return True
               if name.endswith(".clas.xml") or name.endswith(".intf.xml"):
                   return True
-              if name.endswith(".devc.xml") or name.endswith(".sicf.xml") or name.endswith(".http.xml") or name.endswith(".sco2.xml") or name.endswith(".sia6.xml") or name.endswith(".sia7.xml") or name.endswith(".sia1.xml"):
+              if name.endswith(".devc.xml") or name.endswith(".http.xml") or name.endswith(".sco2.xml") or name.endswith(".sia1.xml") or name.endswith(".sia7.xml"):
                   return True
               if "package.devc.xml" in name:
                   return True
@@ -235,6 +235,8 @@ jobs:
               if "/app/" in rel or "/webapp/" in rel:
                   return True
               name = path.name.lower()
+              if name.endswith(".sicf.xml") or name.endswith(".sia6.xml"):
+                  return True
               if "wapa" in name or ".cc_" in name or ".controller_" in name or ".core_" in name or ".devtools_" in name or ".model_" in name or ".view_" in name:
                   return True
               if name.endswith(".js") or name.endswith(".css") or name.endswith(".html") or name.endswith(".json") or name.endswith(".xml"):
@@ -279,7 +281,45 @@ jobs:
 
               original = text
 
-              if is_frontend_asset(path):
+              if path.name.lower().endswith(".sicf.xml"):
+                  # SICF is hybrid:
+                  # - URLs and service names become clean names without # or /
+                  # - ABAP handler references remain SAP notation
+                  text = text.replace("z2ui5", clean_namespace)
+                  text = text.replace("Z2UI5", clean_namespace.upper())
+                  text = text.replace("z2ui5_", f"{clean_namespace}_")
+                  text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
+
+                  # Replace SICF URL and service id values
+                  text = text.replace("#sct#au5", clean_namespace)
+                  text = text.replace("#SCT#AU5", clean_namespace.upper())
+                  text = text.replace("/sct/au5", f"/{clean_namespace}")
+                  text = text.replace("/SCT/AU5", f"/{clean_namespace.upper()}")
+
+                  # Keep ABAP handler as SAP notation
+                  text = text.replace(f"#{clean_namespace.upper()}_CL_LP_HANDLER", f"/{clean_namespace.upper()}_CL_LP_HANDLER")
+                  text = text.replace(f"#{clean_namespace.upper()}_CL_", f"/{clean_namespace.upper()}_CL_")
+                  text = text.replace(f"#{clean_namespace.upper()}_IF_", f"/{clean_namespace.upper()}_IF_")
+
+                  # Generic ABAP handler conversion if old z2ui5 is used
+                  text = text.replace("#z2ui5", f"#{clean_namespace}")
+                  text = text.replace("#Z2UI5", f"#{clean_namespace.upper()}")
+                  text = text.replace("/z2ui5/", f"/{clean_namespace}/")
+                  text = text.replace("/Z2UI5/", f"/{clean_namespace.upper()}/")
+
+                  # Explicit ABAP class conversion in SICF:
+                  # #SCT#AU5_CL_LP_HANDLER -> /SCT/AU5_CL_LP_HANDLER
+                  # (The handler is an ABAP class, so it must remain in SAP notation.)
+                  text = text.replace("#SCT#AU5_CL_LP_HANDLER", "/SCT/AU5_CL_LP_HANDLER")
+                  text = text.replace("#sct#au5_cl_lp_handler", "/sct/au5_cl_lp_handler")
+                  text = text.replace("#SCT#AU5_CL_", "/SCT/AU5_CL_")
+                  text = text.replace("#sct#au5_cl_", "/sct/au5_cl_")
+
+                  # Also catch any generic ABAP class references in SICF
+                  text = text.replace("#Z2UI5_CL_", "/Z2UI5_CL_")
+                  text = text.replace("#z2ui5_cl_", "/z2ui5_cl_")
+
+              elif is_frontend_asset(path):
                   # Frontend namespace: use clean names without # / / _
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
