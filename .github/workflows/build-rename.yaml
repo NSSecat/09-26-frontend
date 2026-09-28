@@ -309,7 +309,6 @@ jobs:
 
                   # Explicit ABAP class conversion in SICF:
                   # #SCT#AU5_CL_LP_HANDLER -> /SCT/AU5_CL_LP_HANDLER
-                  # (The handler is an ABAP class, so it must remain in SAP notation.)
                   text = text.replace("#SCT#AU5_CL_LP_HANDLER", "/SCT/AU5_CL_LP_HANDLER")
                   text = text.replace("#sct#au5_cl_lp_handler", "/sct/au5_cl_lp_handler")
                   text = text.replace("#SCT#AU5_CL_", "/SCT/AU5_CL_")
@@ -332,12 +331,19 @@ jobs:
 
               elif is_abap_object(path):
                   # ABAP object namespace: use SAP / abapGit style
-                  text = text.replace("z2ui5", git_namespace)
-                  text = text.replace("Z2UI5", git_namespace.upper())
-                  text = text.replace("z2ui5_", f"{git_namespace}_")
-                  text = text.replace("Z2UI5_", f"{git_namespace.upper()}_")
+                  # IMPORTANT:
+                  #   - file names get #sct#au5
+                  #   - code content gets /sct/au5
+                  text = text.replace("z2ui5", sap_namespace.lower())
+                  text = text.replace("Z2UI5", sap_namespace.upper())
+                  text = text.replace("z2ui5_", f"{sap_namespace.lower()}_")
+                  text = text.replace("Z2UI5_", f"{sap_namespace.upper()}_")
                   text = text.replace("/z2ui5/", f"{sap_namespace}")
                   text = text.replace("/Z2UI5/", f"{sap_namespace.upper()}")
+                  text = text.replace("#z2ui5", f"{git_namespace}")
+                  text = text.replace("#Z2UI5", f"{git_namespace.upper()}")
+                  text = text.replace("#z2ui5_", f"{git_namespace}_")
+                  text = text.replace("#Z2UI5_", f"{git_namespace.upper()}_")
 
               if text != original:
                   path.write_text(text, encoding="utf-8")
@@ -433,7 +439,7 @@ jobs:
             git add -A
           )
 
-          tree="$(GIT_INDEX_FILE="$index" git write-tree)"
+          tree="$(GIT_INDEX_FILE=\"$index\" git write-tree)"
 
           if [ -n "$parent" ] &&
              [ "$(git rev-parse "$parent^{tree}")" = "$tree" ]; then
