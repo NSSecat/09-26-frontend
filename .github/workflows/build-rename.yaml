@@ -1,4 +1,4 @@
-name: build-rename
+name: frontend-rename
 
 on:
   workflow_dispatch:
@@ -235,11 +235,15 @@ jobs:
               if "/app/" in rel or "/webapp/" in rel:
                   return True
               name = path.name.lower()
-              if name.endswith(".sicf.xml") or name.endswith(".sia6.xml"):
+              if name.endswith(".sicf.xml") or name.endswith(".sia6.xml") or name.endswith(".sush.xml"):
+                  return True
+              if name.endswith(".yaml") or name.endswith(".yml"):
+                  return True
+              if name.endswith(".d.ts") or name.endswith(".json"):
                   return True
               if "wapa" in name or ".cc_" in name or ".controller_" in name or ".core_" in name or ".devtools_" in name or ".model_" in name or ".view_" in name:
                   return True
-              if name.endswith(".js") or name.endswith(".css") or name.endswith(".html") or name.endswith(".json") or name.endswith(".xml"):
+              if name.endswith(".js") or name.endswith(".css") or name.endswith(".html") or name.endswith(".xml"):
                   if "wapa" in name or "controller_" in name or "core_" in name or "devtools_" in name or "model_" in name or "view_" in name:
                       return True
               return False
