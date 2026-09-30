@@ -254,16 +254,10 @@ jobs:
                   continue
 
               name = path.name
-              if is_frontend_asset(path):
-                  new_name = name.replace("z2ui5", clean_namespace)
-                  new_name = new_name.replace("Z2UI5", clean_namespace.upper())
-                  if new_name != name:
-                      path.rename(path.with_name(new_name))
-              elif is_abap_object(path):
-                  new_name = name.replace("z2ui5", git_namespace)
-                  new_name = new_name.replace("Z2UI5", git_namespace.upper())
-                  if new_name != name:
-                      path.rename(path.with_name(new_name))
+              new_name = name.replace("z2ui5", git_namespace)
+              new_name = new_name.replace("Z2UI5", git_namespace.upper())
+              if new_name != name:
+                path.rename(path.with_name(new_name))
 
           # Second pass: replace namespace references in file contents
           for path in sorted(base.rglob("*"), key=lambda p: (len(p.parts), str(p)), reverse=True):
