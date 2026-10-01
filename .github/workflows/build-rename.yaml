@@ -51,6 +51,7 @@ jobs:
       #   SAP_NAMESPACE  = /sct/au5
       #   GIT_NAMESPACE  = #sct#au5
       #   CLEAN_NAMESPACE = sctau5
+      #   FLP_NAMESPACE   = au5_flp
       #   BRANCH         = rename_standard_v2_sct_au5
       # ---------------------------------------------------------------
       - name: Derive namespace and branch name
@@ -229,23 +230,40 @@ jobs:
               rel = path.relative_to(base)
               parts = rel.parts
               name = path.name
+              lower_name = name.lower()
 
               is_src_01 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "01"
               is_src_02 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "02"
+              is_sicf = lower_name.endswith(".sicf.xml")
 
-              if is_src_01:
-                  # src/01: use git_namespace (#sct#) + clean_namespace (sctau5)
+              if is_src_01 and is_sicf:
+                  # src/01 SICF file:
+                  # z2ui5 <hash>.sicf.xml -> #sct#sctau5 <hash>.sicf.xml
+                  new_name = name.replace("z2ui5", "#sct#sctau5")
+                  new_name = new_name.replace("Z2UI5", "#SCT#SCTAU5")
+
+              elif is_src_02 and is_sicf:
+                  # src/02 SICF file:
+                  # z2ui5 <hash>.sicf.xml -> #sct#au5_flp <hash>.sicf.xml
+                  new_name = name.replace("z2ui5", "#sct#au5_flp")
+                  new_name = new_name.replace("Z2UI5", "#SCT#AU5_FLP")
+
+              elif is_src_01:
+                  # Non-SICF files in src/01
                   new_name = name.replace("z2ui5", f"{git_namespace}{clean_namespace}")
                   new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{clean_namespace.upper()}")
-                  if new_name != name:
-                      path.rename(path.with_name(new_name))
 
               elif is_src_02:
-                  # src/02: use git_namespace (#sct#) + flp_namespace (au5_flp)
+                  # Non-SICF files in src/02
                   new_name = name.replace("z2ui5", f"{git_namespace}{flp_namespace}")
                   new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{flp_namespace.upper()}")
-                  if new_name != name:
-                      path.rename(path.with_name(new_name))
+
+              else:
+                  new_name = name.replace("z2ui5", git_namespace)
+                  new_name = new_name.replace("Z2UI5", git_namespace.upper())
+
+              if new_name != name:
+                  path.rename(path.with_name(new_name))
 
           # Second pass: replace namespace references in file contents
           for path in sorted(base.rglob("*"), key=lambda p: (len(p.parts), str(p)), reverse=True):
@@ -266,35 +284,39 @@ jobs:
                   continue
 
               original = text
-
               rel = path.relative_to(base)
               parts = rel.parts
 
               is_src_01 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "01"
               is_src_02 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "02"
+              is_sicf = path.name.lower().endswith(".sicf.xml")
 
               if is_src_01:
-                  # src/01: ABAP HTTP Service
-                  # Dateinamen und URLs/Klassen-Referenzen: sctau5 (clean namespace)
+                  # src/01:
+                  # URL / ICF / service names = sctau5
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
                   text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
                   text = text.replace("z2ui5.", f"{clean_namespace}.")
                   text = text.replace("Z2UI5.", f"{clean_namespace.upper()}.")
+                  text = text.replace("z2ui5/", f"{clean_namespace}/")
+                  text = text.replace("Z2UI5/", f"{clean_namespace.upper()}/")
 
               elif is_src_02:
-                  # src/02: UI5 BSP / FLP
-                  # SICF Dateien: URL/ICF-Namen: au5_flp
-                  # Frontend-Assets (JS, etc): sctau5
-                  if path.name.lower().endswith(".sicf.xml"):
-                      # SICF: URL und ICF-Namen kriegen au5_flp
+                  if is_sicf:
+                      # src/02 SICF:
+                      # url / service names use au5_flp
                       text = text.replace("z2ui5", flp_namespace)
                       text = text.replace("Z2UI5", flp_namespace.upper())
                       text = text.replace("z2ui5_", f"{flp_namespace}_")
                       text = text.replace("Z2UI5_", f"{flp_namespace.upper()}_")
+                      text = text.replace("z2ui5.", f"{flp_namespace}.")
+                      text = text.replace("Z2UI5.", f"{flp_namespace.upper()}.")
+                      text = text.replace("z2ui5/", f"{flp_namespace}/")
+                      text = text.replace("Z2UI5/", f"{flp_namespace.upper()}/")
                   else:
-                      # Andere Frontend-Assets: sctau5
+                      # Other src/02 frontend assets use sctau5
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
                       text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -305,7 +327,6 @@ jobs:
                       text = text.replace("Z2UI5/", f"{clean_namespace.upper()}/")
 
               else:
-                  # Außerhalb von src/: alle frontend assets bekommen sctau5
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
