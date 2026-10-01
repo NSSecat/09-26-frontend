@@ -188,12 +188,11 @@ jobs:
       # ---------------------------------------------------------------
       # Rename everything in the selected frontend result tree.
       #
-      # Hardcoded specific rules:
-      # - src/01 SICF files: #sct#sctau5 ...
+      # Special logic:
+      # - src/01 SICF file: #sct#sctau5 ...
       # - src/02 all files except package.devc.xml: #sct#au5_flp ...
       # - package.devc.xml remains unchanged
-      #
-      # Every other file keeps the standard git namespace renaming.
+      # - all other files keep default git namespace
       # ---------------------------------------------------------------
       - name: Rename frontend namespace in generated files
         shell: bash
@@ -228,22 +227,21 @@ jobs:
 
               is_src_01 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "01"
               is_src_02 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "02"
-
               is_sicf = lower_name.endswith(".sicf.xml")
               is_package_devc = lower_name.endswith("package.devc.xml")
 
               if is_src_01 and is_sicf:
-                  # src/01 SICF file: hardcoded
+                  # src/01 SICF file -> hardcoded
                   new_name = name.replace("z2ui5", "#sct#sctau5")
                   new_name = new_name.replace("Z2UI5", "#SCT#SCTAU5")
 
               elif is_src_02 and not is_package_devc:
-                  # src/02 all files except package.devc.xml: hardcoded
+                  # src/02 all files except package.devc.xml -> hardcoded
                   new_name = name.replace("z2ui5", "#sct#au5_flp")
                   new_name = new_name.replace("Z2UI5", "#SCT#AU5_FLP")
 
               else:
-                  # Default file naming for everything else
+                  # Default file naming
                   new_name = name.replace("z2ui5", git_namespace)
                   new_name = new_name.replace("Z2UI5", git_namespace.upper())
 
@@ -279,20 +277,26 @@ jobs:
 
               if is_src_01:
                   lower_name = path.name.lower()
+                  is_abap_object = (
+                      lower_name.endswith(".clas.abap")
+                      or lower_name.endswith(".intf.abap")
+                      or lower_name.endswith(".clas.xml")
+                      or lower_name.endswith(".intf.xml")
+                      or lower_name.endswith(".devc.xml")
+                  )
 
-                  if lower_name.endswith(".clas.abap") or lower_name.endswith(".intf.abap") or lower_name.endswith(".clas.xml") or lower_name.endswith(".intf.xml") or lower_name.endswith(".devc.xml"):
-                      # ABAP code references must be SAP notation
+                  if is_abap_object:
+                      # ABAP object references must be SAP notation
                       text = text.replace("z2ui5", "/sct/au5")
                       text = text.replace("Z2UI5", "/SCT/AU5")
                       text = text.replace("z2ui5_", "/sct/au5_")
                       text = text.replace("Z2UI5_", "/SCT/AU5_")
                   elif is_sicf:
-                      # src/01 SICF hardcoded values
+                      # src/01 SICF content
                       text = text.replace("z2ui5", "sctau5")
                       text = text.replace("Z2UI5", "SCTAU5")
                       text = text.replace("/sap/bc/sctau5/", "/sap/bc/sct/sctau5/")
                       text = text.replace("/SAP/BC/SCTAUA5/", "/SAP/BC/SCT/SCTAUA5/")
-                      text = text.replace("sctau5", "sctau5")
                   else:
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
@@ -301,19 +305,20 @@ jobs:
 
               elif is_src_02:
                   if is_sicf:
-                      # src/02 SICF hardcoded values
+                      # src/02 SICF content
                       text = text.replace("z2ui5", "au5_flp")
                       text = text.replace("Z2UI5", "AU5_FLP")
-                      text = text.replace("/sap/bc/bsp/sap/sct/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
+                      text = text.replace("/sap/bc/ui5_ui5/sap/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
+                      text = text.replace("/sap/bc/bsp/sap/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
                       text = text.replace("/sap/bc/ui5_ui5/sap/sct/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
+                      text = text.replace("/sap/bc/bsp/sap/sct/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
                   elif not is_package_devc:
-                      # Other src/02 files use clean namespace
+                      # Other src/02 frontend files still use clean namespace
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
                       text = text.replace("z2ui5_", f"{clean_namespace}_")
                       text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
                   else:
-                      # package.devc.xml must remain unchanged
                       pass
 
               else:
