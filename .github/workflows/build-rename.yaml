@@ -297,6 +297,8 @@ jobs:
                       text = text.replace("Z2UI5", "SCTAU5")
                       text = text.replace("/sap/bc/sctau5/", "/sap/bc/sct/sctau5/")
                       text = text.replace("/SAP/BC/SCTAUA5/", "/SAP/BC/SCT/SCTAUA5/")
+                      text = text.replace("ICFHANDLER>SCTAU5_CL_", "ICFHANDLER>/SCT/AU5_CL_")
+                      text = text.replace("ICFHANDLER>sctau5_cl_", "ICFHANDLER>/sct/au5_cl_")
                   else:
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
