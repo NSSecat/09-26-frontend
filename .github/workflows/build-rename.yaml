@@ -112,6 +112,7 @@ jobs:
             sap_namespace="/${first_lower}/${second_lower}"
             git_namespace="#${first_lower}#${second_lower}"
             clean_namespace="${first_lower}${second_lower}"
+            flp_namespace="${second_lower}_flp"
             branch_name="rename_${FRONTEND_VARIANT}_${first_lower}_${second_lower}"
             tech_prefix="${tech_namespace}_"
             sap_prefix="${sap_namespace}_"
@@ -121,6 +122,7 @@ jobs:
             sap_namespace="/${first_lower}/"
             git_namespace="#${first_lower}"
             clean_namespace="${first_lower}"
+            flp_namespace="flp"
             branch_name="rename_${FRONTEND_VARIANT}_${first_lower}"
             tech_prefix="${tech_namespace}_"
             sap_prefix="${sap_namespace}"
@@ -150,6 +152,7 @@ jobs:
           echo "SAP_NAMESPACE=$sap_namespace" >> "$GITHUB_ENV"
           echo "GIT_NAMESPACE=$git_namespace" >> "$GITHUB_ENV"
           echo "CLEAN_NAMESPACE=$clean_namespace" >> "$GITHUB_ENV"
+          echo "FLP_NAMESPACE=$flp_namespace" >> "$GITHUB_ENV"
           echo "TECH_PREFIX=$tech_prefix" >> "$GITHUB_ENV"
           echo "SAP_PREFIX=$sap_prefix" >> "$GITHUB_ENV"
           echo "GIT_PREFIX=$git_prefix" >> "$GITHUB_ENV"
@@ -160,6 +163,7 @@ jobs:
           echo "ABAP code namespace:   $sap_namespace"
           echo "Git filename namespace: $git_namespace"
           echo "Clean namespace:       $clean_namespace"
+          echo "FLP namespace:         $flp_namespace"
           echo "Variant:               $FRONTEND_VARIANT"
           echo "Branch:                $branch_name"
 
@@ -187,10 +191,13 @@ jobs:
       # Rename everything in the selected frontend result tree.
       #
       # Important split:
-      #   - ABAP objects and ABAP references in src/ stay in SAP/abapGit style
-      #     like #sct#au5 or /sct/au5
-      #   - UI5/JavaScript/SICF/frontend references become clean names like
-      #     sctau5 without #, / or _
+      #   - src/01: ABAP HTTP Service
+      #     Dateiname: #sct#sctau5
+      #     Inhalt: sctau5
+      #   - src/02: UI5 BSP / FLP
+      #     Dateiname: #sct#au5_flp
+      #     Inhalt (URL/ICF): au5_flp
+      #     Inhalt (JS/etc): sctau5
       # ---------------------------------------------------------------
       - name: Rename frontend namespace in generated files
         shell: bash
@@ -198,8 +205,7 @@ jobs:
           set -euo pipefail
 
           export CLEAN_NAMESPACE
-          export TECH_NAMESPACE
-          export SAP_NAMESPACE
+          export FLP_NAMESPACE
           export GIT_NAMESPACE
 
           python3 <<'PY'
@@ -208,56 +214,38 @@ jobs:
           from pathlib import Path
 
           clean_namespace = os.environ["CLEAN_NAMESPACE"]
-          tech_namespace = os.environ["TECH_NAMESPACE"]
-          sap_namespace = os.environ["SAP_NAMESPACE"]
+          flp_namespace = os.environ["FLP_NAMESPACE"]
           git_namespace = os.environ["GIT_NAMESPACE"]
 
           base = Path("result") / os.environ["FRONTEND_VARIANT"]
           if not base.exists():
               raise SystemExit(f"Missing variant directory: {base}")
 
-          def is_abap_object(path: Path) -> bool:
-              name = path.name.lower()
-              if name.endswith(".clas.abap") or name.endswith(".intf.abap"):
-                  return True
-              if name.endswith(".clas.xml") or name.endswith(".intf.xml"):
-                  return True
-              if name.endswith(".devc.xml") or name.endswith(".http.xml") or name.endswith(".sco2.xml") or name.endswith(".sia1.xml") or name.endswith(".sia7.xml"):
-                  return True
-              if "package.devc.xml" in name:
-                  return True
-              if "z2ui5_cl_" in name or "z2ui5_if_" in name:
-                  return True
-              return False
-
-          def is_frontend_asset(path: Path) -> bool:
-              rel = path.relative_to(base).as_posix().lower()
-              if "/app/" in rel or "/webapp/" in rel:
-                  return True
-              name = path.name.lower()
-              if name.endswith(".sicf.xml") or name.endswith(".sia6.xml") or name.endswith(".sush.xml"):
-                  return True
-              if name.endswith(".yaml") or name.endswith(".yml"):
-                  return True
-              if name.endswith(".d.ts") or name.endswith(".json"):
-                  return True
-              if "wapa" in name or ".cc_" in name or ".controller_" in name or ".core_" in name or ".devtools_" in name or ".model_" in name or ".view_" in name:
-                  return True
-              if name.endswith(".js") or name.endswith(".css") or name.endswith(".html") or name.endswith(".xml"):
-                  if "wapa" in name or "controller_" in name or "core_" in name or "devtools_" in name or "model_" in name or "view_" in name:
-                      return True
-              return False
-
           # First pass: rename file names
           for path in sorted(base.rglob("*"), key=lambda p: (len(p.parts), str(p)), reverse=True):
               if not path.is_file():
                   continue
 
+              rel = path.relative_to(base)
+              parts = rel.parts
               name = path.name
-              new_name = name.replace("z2ui5", git_namespace)
-              new_name = new_name.replace("Z2UI5", git_namespace.upper())
-              if new_name != name:
-                path.rename(path.with_name(new_name))
+
+              is_src_01 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "01"
+              is_src_02 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "02"
+
+              if is_src_01:
+                  # src/01: use git_namespace (#sct#) + clean_namespace (sctau5)
+                  new_name = name.replace("z2ui5", f"{git_namespace}{clean_namespace}")
+                  new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{clean_namespace.upper()}")
+                  if new_name != name:
+                      path.rename(path.with_name(new_name))
+
+              elif is_src_02:
+                  # src/02: use git_namespace (#sct#) + flp_namespace (au5_flp)
+                  new_name = name.replace("z2ui5", f"{git_namespace}{flp_namespace}")
+                  new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{flp_namespace.upper()}")
+                  if new_name != name:
+                      path.rename(path.with_name(new_name))
 
           # Second pass: replace namespace references in file contents
           for path in sorted(base.rglob("*"), key=lambda p: (len(p.parts), str(p)), reverse=True):
@@ -279,45 +267,45 @@ jobs:
 
               original = text
 
-              if path.name.lower().endswith(".sicf.xml"):
-                  # SICF is hybrid:
-                  # - URLs and service names become clean names without # or /
-                  # - ABAP handler references remain SAP notation
+              rel = path.relative_to(base)
+              parts = rel.parts
+
+              is_src_01 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "01"
+              is_src_02 = len(parts) >= 2 and parts[0] == "src" and parts[1] == "02"
+
+              if is_src_01:
+                  # src/01: ABAP HTTP Service
+                  # Dateinamen und URLs/Klassen-Referenzen: sctau5 (clean namespace)
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
                   text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
+                  text = text.replace("z2ui5.", f"{clean_namespace}.")
+                  text = text.replace("Z2UI5.", f"{clean_namespace.upper()}.")
 
-                  # Replace SICF URL and service id values
-                  text = text.replace("#sct#au5", clean_namespace)
-                  text = text.replace("#SCT#AU5", clean_namespace.upper())
-                  text = text.replace("/sct/au5", f"/{clean_namespace}")
-                  text = text.replace("/SCT/AU5", f"/{clean_namespace.upper()}")
+              elif is_src_02:
+                  # src/02: UI5 BSP / FLP
+                  # SICF Dateien: URL/ICF-Namen: au5_flp
+                  # Frontend-Assets (JS, etc): sctau5
+                  if path.name.lower().endswith(".sicf.xml"):
+                      # SICF: URL und ICF-Namen kriegen au5_flp
+                      text = text.replace("z2ui5", flp_namespace)
+                      text = text.replace("Z2UI5", flp_namespace.upper())
+                      text = text.replace("z2ui5_", f"{flp_namespace}_")
+                      text = text.replace("Z2UI5_", f"{flp_namespace.upper()}_")
+                  else:
+                      # Andere Frontend-Assets: sctau5
+                      text = text.replace("z2ui5", clean_namespace)
+                      text = text.replace("Z2UI5", clean_namespace.upper())
+                      text = text.replace("z2ui5_", f"{clean_namespace}_")
+                      text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
+                      text = text.replace("z2ui5.", f"{clean_namespace}.")
+                      text = text.replace("Z2UI5.", f"{clean_namespace.upper()}.")
+                      text = text.replace("z2ui5/", f"{clean_namespace}/")
+                      text = text.replace("Z2UI5/", f"{clean_namespace.upper()}/")
 
-                  # Keep ABAP handler as SAP notation
-                  text = text.replace(f"#{clean_namespace.upper()}_CL_LP_HANDLER", f"/{clean_namespace.upper()}_CL_LP_HANDLER")
-                  text = text.replace(f"#{clean_namespace.upper()}_CL_", f"/{clean_namespace.upper()}_CL_")
-                  text = text.replace(f"#{clean_namespace.upper()}_IF_", f"/{clean_namespace.upper()}_IF_")
-
-                  # Generic ABAP handler conversion if old z2ui5 is used
-                  text = text.replace("#z2ui5", f"#{clean_namespace}")
-                  text = text.replace("#Z2UI5", f"#{clean_namespace.upper()}")
-                  text = text.replace("/z2ui5/", f"/{clean_namespace}/")
-                  text = text.replace("/Z2UI5/", f"/{clean_namespace.upper()}/")
-
-                  # Explicit ABAP class conversion in SICF:
-                  # #SCT#AU5_CL_LP_HANDLER -> /SCT/AU5_CL_LP_HANDLER
-                  text = text.replace("#SCT#AU5_CL_LP_HANDLER", "/SCT/AU5_CL_LP_HANDLER")
-                  text = text.replace("#sct#au5_cl_lp_handler", "/sct/au5_cl_lp_handler")
-                  text = text.replace("#SCT#AU5_CL_", "/SCT/AU5_CL_")
-                  text = text.replace("#sct#au5_cl_", "/sct/au5_cl_")
-
-                  # Also catch any generic ABAP class references in SICF
-                  text = text.replace("#Z2UI5_CL_", "/Z2UI5_CL_")
-                  text = text.replace("#z2ui5_cl_", "/z2ui5_cl_")
-
-              elif is_frontend_asset(path):
-                  # Frontend namespace: use clean names without # / / _
+              else:
+                  # Außerhalb von src/: alle frontend assets bekommen sctau5
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -326,22 +314,6 @@ jobs:
                   text = text.replace("Z2UI5.", f"{clean_namespace.upper()}.")
                   text = text.replace("z2ui5/", f"{clean_namespace}/")
                   text = text.replace("Z2UI5/", f"{clean_namespace.upper()}/")
-
-              elif is_abap_object(path):
-                  # ABAP object namespace: use SAP / abapGit style
-                  # IMPORTANT:
-                  #   - file names get #sct#au5
-                  #   - code content gets /sct/au5
-                  text = text.replace("z2ui5", sap_namespace.lower())
-                  text = text.replace("Z2UI5", sap_namespace.upper())
-                  text = text.replace("z2ui5_", f"{sap_namespace.lower()}_")
-                  text = text.replace("Z2UI5_", f"{sap_namespace.upper()}_")
-                  text = text.replace("/z2ui5/", f"{sap_namespace}")
-                  text = text.replace("/Z2UI5/", f"{sap_namespace.upper()}")
-                  text = text.replace("#z2ui5", f"{git_namespace}")
-                  text = text.replace("#Z2UI5", f"{git_namespace.upper()}")
-                  text = text.replace("#z2ui5_", f"{git_namespace}_")
-                  text = text.replace("#Z2UI5_", f"{git_namespace.upper()}_")
 
               if text != original:
                   path.write_text(text, encoding="utf-8")
