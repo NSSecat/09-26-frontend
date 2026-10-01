@@ -172,9 +172,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ---------------------------------------------------------------
-      # Make sure the selected frontend variant exists.
-      # ---------------------------------------------------------------
       - name: Validate variant directory
         shell: bash
         run: |
@@ -191,14 +188,15 @@ jobs:
       # ---------------------------------------------------------------
       # Rename everything in the selected frontend result tree.
       #
-      # Important split:
-      #   - src/01: ABAP HTTP Service
-      #     Dateiname: #sct#sctau5
-      #     Inhalt: sctau5
-      #   - src/02: UI5 BSP / FLP
-      #     Dateiname: #sct#au5_flp
-      #     Inhalt (URL/ICF): au5_flp
-      #     Inhalt (JS/etc): sctau5
+      # SICF files are treated specially:
+      #   - src/01: #sct#sctau5 ...
+      #   - src/02: #sct#au5_flp ...
+      #
+      # Every other file remains in the standard git namespace notation:
+      #   #sct#au5 ...
+      #
+      # The ABAP class name remains correct:
+      #   #sct#au5_cl_lp_handler.clas.abap
       # ---------------------------------------------------------------
       - name: Rename frontend namespace in generated files
         shell: bash
@@ -237,28 +235,17 @@ jobs:
               is_sicf = lower_name.endswith(".sicf.xml")
 
               if is_src_01 and is_sicf:
-                  # src/01 SICF file:
-                  # z2ui5 <hash>.sicf.xml -> #sct#sctau5 <hash>.sicf.xml
+                  # Hardcoded SICF naming in src/01
                   new_name = name.replace("z2ui5", "#sct#sctau5")
                   new_name = new_name.replace("Z2UI5", "#SCT#SCTAU5")
 
               elif is_src_02 and is_sicf:
-                  # src/02 SICF file:
-                  # z2ui5 <hash>.sicf.xml -> #sct#au5_flp <hash>.sicf.xml
+                  # Hardcoded SICF naming in src/02
                   new_name = name.replace("z2ui5", "#sct#au5_flp")
                   new_name = new_name.replace("Z2UI5", "#SCT#AU5_FLP")
 
-              elif is_src_01:
-                  # Non-SICF files in src/01
-                  new_name = name.replace("z2ui5", f"{git_namespace}{clean_namespace}")
-                  new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{clean_namespace.upper()}")
-
-              elif is_src_02:
-                  # Non-SICF files in src/02
-                  new_name = name.replace("z2ui5", f"{git_namespace}{flp_namespace}")
-                  new_name = new_name.replace("Z2UI5", f"{git_namespace.upper()}{flp_namespace.upper()}")
-
               else:
+                  # Default naming for everything else
                   new_name = name.replace("z2ui5", git_namespace)
                   new_name = new_name.replace("Z2UI5", git_namespace.upper())
 
@@ -292,8 +279,7 @@ jobs:
               is_sicf = path.name.lower().endswith(".sicf.xml")
 
               if is_src_01:
-                  # src/01:
-                  # URL / ICF / service names = sctau5
+                  # src/01: clean namespace in URL / service names
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -305,8 +291,7 @@ jobs:
 
               elif is_src_02:
                   if is_sicf:
-                      # src/02 SICF:
-                      # url / service names use au5_flp
+                      # src/02 SICF: service URL/name uses au5_flp
                       text = text.replace("z2ui5", flp_namespace)
                       text = text.replace("Z2UI5", flp_namespace.upper())
                       text = text.replace("z2ui5_", f"{flp_namespace}_")
@@ -316,7 +301,7 @@ jobs:
                       text = text.replace("z2ui5/", f"{flp_namespace}/")
                       text = text.replace("Z2UI5/", f"{flp_namespace.upper()}/")
                   else:
-                      # Other src/02 frontend assets use sctau5
+                      # Other src/02 frontend files still use sctau5
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
                       text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -327,6 +312,7 @@ jobs:
                       text = text.replace("Z2UI5/", f"{clean_namespace.upper()}/")
 
               else:
+                  # General frontend files
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
