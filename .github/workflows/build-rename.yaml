@@ -273,6 +273,11 @@ jobs:
                       text = text.replace("Z2UI5_", f"{clean_namespace.upper()}_")
 
               elif is_src_02:
+                  is_wapa = path.name.lower().endswith(".wapa.xml")
+                  if is_wapa:
+                    # src/02 wapa.xml: APPLNAME hardcoded to /SCT/AU5_FLP
+                    text = text.replace("<APPLNAME>z2ui5</APPLNAME>", "<APPLNAME>/SCT/AU5_FLP</APPLNAME>")
+                    text = text.replace("<APPLNAME>Z2UI5</APPLNAME>", "<APPLNAME>/SCT/AU5_FLP</APPLNAME>")
                   if is_sicf:
                       # src/02 SICF hardcoded values
                       text = text.replace("z2ui5", "au5_flp")
