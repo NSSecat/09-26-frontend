@@ -257,6 +257,7 @@ jobs:
                       text = text.replace("Z2UI5_", "/SCT/AU5_")
                   elif is_sicf:
                       # src/01 SICF hardcoded for AU5_HANDLER
+                      text = text.replace("ICFHANDLER>Z2UI5_CL_LP_HANDLER</ICFHANDLER>", "ICFHANDLER>/SCT/AU5_CL_LP_HANDLER</ICFHANDLER>")
                       text = text.replace("z2ui5", "au5_handler")
                       text = text.replace("Z2UI5", "AU5_HANDLER")
                       text = text.replace("/sap/bc/au5_handler/", "/sap/bc/sct/au5_handler/")
@@ -265,7 +266,6 @@ jobs:
                       text = text.replace("/SAP/BC/SCTAUA5/", "/SAP/BC/SCT/AU5_HANDLER/")
                       text = text.replace("<ICF_NAME>Z2UI5</ICF_NAME>", "<ICF_NAME>AU5_HANDLER</ICF_NAME>")
                       text = text.replace("<ORIG_NAME>z2ui5</ORIG_NAME>", "<ORIG_NAME>au5_handler</ORIG_NAME>")
-                      text = text.replace("ICFHANDLER>/SCT/AU5_CL_LP_HANDLER</ICFHANDLER>", "ICFHANDLER>/SCT/AU5_CL_LP_HANDLER</ICFHANDLER>")
                   else:
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
