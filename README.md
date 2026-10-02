@@ -1,3 +1,5 @@
+> ⚙️ **Generated branch `standard_v2`** — built in [abap2UI5/abap2UI5](https://github.com/abap2UI5/abap2UI5) by its `frontend_deploy` workflow and pushed here. Do not commit in this repository; changes belong into abap2UI5. Frontend state: `abap2UI5/abap2UI5@2f9373758e4f` (framework 1.144.1) — see `VERSION`.
+
 [![frontend_check](https://github.com/abap2UI5/abap2UI5/actions/workflows/frontend_check.yaml/badge.svg?branch=main)](https://github.com/abap2UI5/abap2UI5/actions/workflows/frontend_check.yaml)
 [![frontend_deploy](https://github.com/abap2UI5/abap2UI5/actions/workflows/frontend_deploy.yaml/badge.svg?branch=main)](https://github.com/abap2UI5/abap2UI5/actions/workflows/frontend_deploy.yaml)
 
@@ -61,8 +63,8 @@ Need the BSP under a **different name** (e.g. a second copy in the same system)?
 
 | resourceRoot | Sibling BSP | Built from |
 |---|---|---|
-| `z2ui5_cci` | `Z2UI5_CCI` | [abap2UI5-addons/custom-controls](https://github.com/abap2UI5-addons/custom-controls) — community custom controls |
-| `z2ui5_ccc` | `Z2UI5_CCC` | [abap2UI5/customer-frontend-extension](https://github.com/abap2UI5/customer-frontend-extension) — a customer's own reuse library, icon font or CSS |
+| `sctau5_cci` | `SCTAU5_CCI` | [abap2UI5-addons/custom-controls](https://github.com/abap2UI5-addons/custom-controls) — community custom controls |
+| `sctau5_ccc` | `SCTAU5_CCC` | [abap2UI5/customer-frontend-extension](https://github.com/abap2UI5/customer-frontend-extension) — a customer's own reuse library, icon font or CSS |
 
 Neither BSP has to be installed: the browser requests nothing from a resourceRoot until a view names the namespace. Both entries come from abap2UI5 `app/webapp` — see "Where to change what" above.
 
