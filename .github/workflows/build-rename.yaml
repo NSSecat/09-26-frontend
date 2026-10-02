@@ -282,10 +282,8 @@ jobs:
                       # src/02 SICF hardcoded values
                       text = text.replace("z2ui5", "au5_flp")
                       text = text.replace("Z2UI5", "AU5_FLP")
-                      text = text.replace("/sap/bc/ui5_ui5/sap/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
-                      text = text.replace("/sap/bc/bsp/sap/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
-                      text = text.replace("/sap/bc/ui5_ui5/sap/sct/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
-                      text = text.replace("/sap/bc/bsp/sap/sct/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
+                      text = text.replace("/sap/bc/ui5_ui5/sap/au5_flp/", "/sap/bc/ui5_ui5/sct/au5_flp/")
+                      text = text.replace("/sap/bc/bsp/sap/au5_flp/", "/sap/bc/bsp/sct/au5_flp/")
                   elif not is_package_devc:
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
