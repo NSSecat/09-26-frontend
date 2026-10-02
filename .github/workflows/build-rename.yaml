@@ -40,20 +40,6 @@ jobs:
       NAMESPACE: ${{ inputs.namespace }}
 
     steps:
-      # ---------------------------------------------------------------
-      # Derive the namespace representations used in the frontend output.
-      #
-      # Example input:
-      #   #SCT#AU5
-      #
-      # Results:
-      #   TECH_NAMESPACE = sct_au5
-      #   SAP_NAMESPACE  = /sct/au5
-      #   GIT_NAMESPACE  = #sct#au5
-      #   CLEAN_NAMESPACE = sctau5
-      #   FLP_NAMESPACE   = au5_flp
-      #   BRANCH         = rename_standard_v2_sct_au5
-      # ---------------------------------------------------------------
       - name: Derive namespace and branch name
         shell: bash
         run: |
@@ -136,19 +122,6 @@ jobs:
             exit 1
           fi
 
-          if [ "$tech_namespace" = "z2ui5" ]; then
-            echo "::error::Namespace '$NAMESPACE' is the original namespace - nothing to rename."
-            exit 1
-          fi
-
-          if [ "$FRONTEND_VARIANT" != "cloud" ] &&
-             [ "$FRONTEND_VARIANT" != "cloud_v2" ] &&
-             [ "$FRONTEND_VARIANT" != "standard" ] &&
-             [ "$FRONTEND_VARIANT" != "standard_v2" ]; then
-            echo "::error::Invalid frontend variant '$FRONTEND_VARIANT'."
-            exit 1
-          fi
-
           echo "TECH_NAMESPACE=$tech_namespace" >> "$GITHUB_ENV"
           echo "SAP_NAMESPACE=$sap_namespace" >> "$GITHUB_ENV"
           echo "GIT_NAMESPACE=$git_namespace" >> "$GITHUB_ENV"
@@ -185,15 +158,6 @@ jobs:
 
           echo "Target directory: $variant_dir"
 
-      # ---------------------------------------------------------------
-      # Rename everything in the selected frontend result tree.
-      #
-      # Special logic:
-      # - src/01 SICF file: #sct#sctau5 ...
-      # - src/02 all files except package.devc.xml: #sct#au5_flp ...
-      # - package.devc.xml remains unchanged
-      # - all other files keep default git namespace
-      # ---------------------------------------------------------------
       - name: Rename frontend namespace in generated files
         shell: bash
         run: |
@@ -231,9 +195,9 @@ jobs:
               is_package_devc = lower_name.endswith("package.devc.xml")
 
               if is_src_01 and is_sicf:
-                  # src/01 SICF file -> hardcoded
-                  new_name = name.replace("z2ui5", "#sct#sctau5")
-                  new_name = new_name.replace("Z2UI5", "#SCT#SCTAU5")
+                  # src/01 SICF filename is fixed to #sct#au5_handler
+                  new_name = name.replace("z2ui5", "#sct#au5_handler")
+                  new_name = new_name.replace("Z2UI5", "#SCT#AU5_HANDLER")
 
               elif is_src_02 and not is_package_devc:
                   # src/02 all files except package.devc.xml -> hardcoded
@@ -248,7 +212,7 @@ jobs:
               if new_name != name:
                   path.rename(path.with_name(new_name))
 
-          # Second pass: replace namespace references in file contents
+          # Second pass: replace namespace refs
           for path in sorted(base.rglob("*"), key=lambda p: (len(p.parts), str(p)), reverse=True):
               if not path.is_file():
                   continue
@@ -286,19 +250,22 @@ jobs:
                   )
 
                   if is_abap_object:
-                      # ABAP object references must be SAP notation
+                      # ABAP object references remain SAP notation
                       text = text.replace("z2ui5", "/sct/au5")
                       text = text.replace("Z2UI5", "/SCT/AU5")
                       text = text.replace("z2ui5_", "/sct/au5_")
                       text = text.replace("Z2UI5_", "/SCT/AU5_")
                   elif is_sicf:
-                      # src/01 SICF content
-                      text = text.replace("z2ui5", "sctau5")
-                      text = text.replace("Z2UI5", "SCTAU5")
-                      text = text.replace("/sap/bc/sctau5/", "/sap/bc/sct/sctau5/")
-                      text = text.replace("/SAP/BC/SCTAUA5/", "/SAP/BC/SCT/SCTAUA5/")
-                      text = text.replace("ICFHANDLER>SCTAU5_CL_", "ICFHANDLER>/SCT/AU5_CL_")
-                      text = text.replace("ICFHANDLER>sctau5_cl_", "ICFHANDLER>/sct/au5_cl_")
+                      # src/01 SICF hardcoded for AU5_HANDLER
+                      text = text.replace("z2ui5", "au5_handler")
+                      text = text.replace("Z2UI5", "AU5_HANDLER")
+                      text = text.replace("/sap/bc/sctau5/", "/sap/bc/sct/au5_handler/")
+                      text = text.replace("/SAP/BC/SCTAUA5/", "/SAP/BC/SCT/AU5_HANDLER/")
+                      text = text.replace("/sap/bc/sct/sctau5/", "/sap/bc/sct/au5_handler/")
+                      text = text.replace("/SAP/BC/SCT/SCTAUA5/", "/SAP/BC/SCT/AU5_HANDLER/")
+                      text = text.replace("ICF_NAME>AU5_HANDLER</ICF_NAME>", "ICF_NAME>AU5_HANDLER</ICF_NAME>")
+                      text = text.replace("ORIG_NAME>au5_handler</ORIG_NAME>", "ORIG_NAME>au5_handler</ORIG_NAME>")
+                      text = text.replace("ICFHANDLER>/SCT/AU5_CL_LP_HANDLER</ICFHANDLER>", "ICFHANDLER>/SCT/AU5_CL_LP_HANDLER</ICFHANDLER>")
                   else:
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
@@ -307,7 +274,7 @@ jobs:
 
               elif is_src_02:
                   if is_sicf:
-                      # src/02 SICF content
+                      # src/02 SICF hardcoded values
                       text = text.replace("z2ui5", "au5_flp")
                       text = text.replace("Z2UI5", "AU5_FLP")
                       text = text.replace("/sap/bc/ui5_ui5/sap/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
@@ -315,7 +282,6 @@ jobs:
                       text = text.replace("/sap/bc/ui5_ui5/sap/sct/au5_flp/", "/sap/bc/ui5_ui5/sap/sct/au5_flp/")
                       text = text.replace("/sap/bc/bsp/sap/sct/au5_flp/", "/sap/bc/bsp/sap/sct/au5_flp/")
                   elif not is_package_devc:
-                      # Other src/02 frontend files still use clean namespace
                       text = text.replace("z2ui5", clean_namespace)
                       text = text.replace("Z2UI5", clean_namespace.upper())
                       text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -324,7 +290,6 @@ jobs:
                       pass
 
               else:
-                  # Default frontend replacement elsewhere
                   text = text.replace("z2ui5", clean_namespace)
                   text = text.replace("Z2UI5", clean_namespace.upper())
                   text = text.replace("z2ui5_", f"{clean_namespace}_")
@@ -334,10 +299,6 @@ jobs:
                   path.write_text(text, encoding="utf-8")
           PY
 
-      # ---------------------------------------------------------------
-      # Final safety check: warn if z2ui5 is still left anywhere.
-      # No fail, just warning.
-      # ---------------------------------------------------------------
       - name: Warn about any remaining z2ui5 references
         shell: bash
         run: |
@@ -378,9 +339,6 @@ jobs:
               print("::notice::No z2ui5 references remain in the renamed frontend tree.")
           PY
 
-      # ---------------------------------------------------------------
-      # Assemble branch content from the chosen result version only.
-      # ---------------------------------------------------------------
       - name: Assemble renamed branch
         shell: bash
         run: |
@@ -394,9 +352,6 @@ jobs:
 
           cp -R "$src_dir"/. "$out/"
 
-      # ---------------------------------------------------------------
-      # Push a branch with the renamed result tree.
-      # ---------------------------------------------------------------
       - name: Push renamed branch
         shell: bash
         run: |
