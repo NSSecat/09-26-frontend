@@ -278,6 +278,8 @@ jobs:
                     # src/02 wapa.xml: APPLNAME hardcoded to /SCT/AU5_FLP
                     text = text.replace("<APPLNAME>z2ui5</APPLNAME>", "<APPLNAME>/SCT/AU5_FLP</APPLNAME>")
                     text = text.replace("<APPLNAME>Z2UI5</APPLNAME>", "<APPLNAME>/SCT/AU5_FLP</APPLNAME>")
+                    text = text.replace("<APPLEXT>z2ui5</APPLEXT>", "<APPLEXT>/SCT/AU5_FLP</APPLEXT>")
+                    text = text.replace("<APPLEXT>Z2UI5</APPLEXT>", "<APPLEXT>/SCT/AU5_FLP</APPLEXT>")
                   if is_sicf:
                       # src/02 SICF hardcoded values
                       text = text.replace("z2ui5", "/sct/au5_flp")
